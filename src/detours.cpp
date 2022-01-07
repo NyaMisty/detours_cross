@@ -2509,6 +2509,72 @@ LONG WINAPI DetourDetach(_Inout_ PVOID *ppPointer,
 //   PAGE_NOCACHE           ...
 //   PAGE_WRITECOMBINE      ...
 
+#define DETOUR_PAGE_EXECUTE_ALL    (PAGE_EXECUTE |              \
+                                    PAGE_EXECUTE_READ |         \
+                                    PAGE_EXECUTE_READWRITE |    \
+                                    PAGE_EXECUTE_WRITECOPY)
+
+#define DETOUR_PAGE_NO_EXECUTE_ALL (PAGE_NOACCESS |             \
+                                    PAGE_READONLY |             \
+                                    PAGE_READWRITE |            \
+                                    PAGE_WRITECOPY)
+
+#define DETOUR_PAGE_ATTRIBUTES     (~(DETOUR_PAGE_EXECUTE_ALL | DETOUR_PAGE_NO_EXECUTE_ALL))
+
+C_ASSERT((DETOUR_PAGE_NO_EXECUTE_ALL << 4) == DETOUR_PAGE_EXECUTE_ALL);
+
+static DWORD DetourPageProtectAdjustExecute(_In_  DWORD dwOldProtect,
+                                            _In_  DWORD dwNewProtect)
+//  Copy EXECUTE from dwOldProtect to dwNewProtect.
+{
+    bool const fOldExecute = ((dwOldProtect & DETOUR_PAGE_EXECUTE_ALL) != 0);
+    bool const fNewExecute = ((dwNewProtect & DETOUR_PAGE_EXECUTE_ALL) != 0);
+
+    if (fOldExecute && !fNewExecute) {
+        dwNewProtect = ((dwNewProtect & DETOUR_PAGE_NO_EXECUTE_ALL) << 4)
+            | (dwNewProtect & DETOUR_PAGE_ATTRIBUTES);
+    }
+    else if (!fOldExecute && fNewExecute) {
+        dwNewProtect = ((dwNewProtect & DETOUR_PAGE_EXECUTE_ALL) >> 4)
+            | (dwNewProtect & DETOUR_PAGE_ATTRIBUTES);
+    }
+    return dwNewProtect;
+}
+
+_Success_(return != FALSE)
+BOOL WINAPI DetourVirtualProtectSameExecuteEx(_In_  HANDLE hProcess,
+                                              _In_  PVOID pAddress,
+                                              _In_  SIZE_T nSize,
+                                              _In_  DWORD dwNewProtect,
+                                              _Out_ PDWORD pdwOldProtect)
+// Some systems do not allow executability of a page to change. This function applies
+// dwNewProtect to [pAddress, nSize), but preserving the previous executability.
+// This function is meant to be a drop-in replacement for some uses of VirtualProtectEx.
+// When "restoring" page protection, there is no need to use this function.
+{
+    MEMORY_BASIC_INFORMATION mbi;
+
+    // Query to get existing execute access.
+
+    ZeroMemory(&mbi, sizeof(mbi));
+
+    if (VirtualQueryEx(hProcess, pAddress, &mbi, sizeof(mbi)) == 0) {
+        return FALSE;
+    }
+    return VirtualProtectEx(hProcess, pAddress, nSize,
+                            DetourPageProtectAdjustExecute(mbi.Protect, dwNewProtect),
+                            pdwOldProtect);
+}
+
+_Success_(return != FALSE)
+BOOL WINAPI DetourVirtualProtectSameExecute(_In_  PVOID pAddress,
+                                            _In_  SIZE_T nSize,
+                                            _In_  DWORD dwNewProtect,
+                                            _Out_ PDWORD pdwOldProtect)
+{
+    return DetourVirtualProtectSameExecuteEx(GetCurrentProcess(),
+                                             pAddress, nSize, dwNewProtect, pdwOldProtect);
+}
 
 BOOL WINAPI DetourAreSameGuid(_In_ REFGUID left, _In_ REFGUID right)
 {

@@ -254,6 +254,25 @@ static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD 
     return FALSE;
 }
 
+static SIZE_T VirtualQueryEx(
+  HANDLE                    hProcess,
+  LPCVOID                   lpAddress,
+  PMEMORY_BASIC_INFORMATION lpBuffer,
+  SIZE_T                    dwLength
+) {
+    if (hProcess != GetCurrentProcess()) {
+        return 0;
+    }
+    return VirtualQueryEx(lpAddress, lpBuffer, dwLength);
+}
+
+static BOOL VirtualProtectEx(HANDLE hProcess, PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD *flOld) {
+    if (hProcess != GetCurrentProcess()) {
+        return FALSE;
+    }
+    return VirtualProtect(addr, dwSize, flNewProtect, flOld);
+}
+
 static LPVOID VirtualAlloc(
   LPVOID lpAddress,
   SIZE_T dwSize,
