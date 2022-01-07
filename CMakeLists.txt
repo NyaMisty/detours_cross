@@ -47,5 +47,5 @@ endif()
 
 
 add_executable(sample_simple sample/simple/simple.cpp)
-include_directories(sample_simple src/)
+include_directories(./include)
 target_link_libraries(sample_simple PRIVATE detour)
