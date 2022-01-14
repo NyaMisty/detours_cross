@@ -1,4 +1,12 @@
 #define DETOUR_DEBUG 1
+#ifndef DETOUR_TRACE
+#if DETOUR_DEBUG
+#define DETOUR_TRACE(x) printf x
+#include <stdio.h>
+#else
+#define DETOUR_TRACE(x)
+#endif
+#endif
 
 #ifndef _WINDOWS
 
@@ -272,9 +280,16 @@ static SIZE_T VirtualQuery(
 }
 
 static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD *flOld) {
-    printf("VirtualProtect(%p, %lx, %d)\n", addr, dwSize, flNewProtect);
+    DETOUR_TRACE(("VirtualProtect(%p, %lx, %d)\n", addr, dwSize, flNewProtect));
     int newR = 0, newW = 0, newX = 0;
     WinProtToRWX(flNewProtect, &newR, &newW, &newX);
+#ifdef _DARWIN
+    if (newW && newX) {
+        DETOUR_TRACE(("W^X detected, removing executing bit!"));
+        newX = 0;
+    }
+#endif
+
 #if defined(_LINUX) || defined(_DARWIN)
     LONG aligned_addr = (LONG)addr & ~(getpagesize() - 1);
     SIZE_T aligned_size = (LONG)addr - aligned_addr + dwSize;
@@ -325,17 +340,24 @@ static LPVOID VirtualAlloc(
   DWORD  flAllocationType,
   DWORD  flProtect
 ) {
-    printf("VirtualAlloc(%p, 0x%lx, %d, %d)\n", lpAddress, dwSize, flAllocationType, flProtect);
+    DETOUR_TRACE(("VirtualAlloc(%p, 0x%lx, %d, %d)\n", lpAddress, dwSize, flAllocationType, flProtect));
     int newR = 0, newW = 0, newX = 0;
     WinProtToRWX(flProtect, &newR, &newW, &newX);
-    printf("RWX parsed: %d %d %d\n", newR, newW, newX);
+    DETOUR_TRACE(("RWX parsed: %d %d %d\n", newR, newW, newX));
+#ifdef _DARWIN
+    if (newW && newX) {
+        DETOUR_TRACE(("W^X detected, removing executing bit!"));
+        newX = 0;
+    }
+#endif
     int newProt = 0;
     newProt |= newR ? PROT_READ : 0;
     newProt |= newW ? PROT_WRITE : 0;
     newProt |= newX ? PROT_EXEC : 0;
+    if ()
 
     LPVOID retAddr = mmap(lpAddress, dwSize, newProt, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-    printf("mmap(%p, 0x%lx, %d) = %p, errno = %d\n", lpAddress, dwSize, newProt, retAddr, errno);
+    DETOUR_TRACE(("mmap(%p, 0x%lx, %d) = %p, errno = %d\n", lpAddress, dwSize, newProt, retAddr, errno));
     
     if (retAddr == (LPVOID)-1) {
         SetLastError(ERROR_ERRNO_FAIL_BASE + errno);
@@ -343,6 +365,8 @@ static LPVOID VirtualAlloc(
     }
     return retAddr;
 }
+
+#define FlushInstructionCache _FlushInstructionCache
 
 static BOOL FlushInstructionCache(
   HANDLE  hProcess,
@@ -383,3 +407,5 @@ static DWORD SuspendThread(
 #endif // _WINDOWS
 
 #endif // DETOURS_INTERNAL
+
+#undef DETOUR_TRACE

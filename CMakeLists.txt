@@ -12,7 +12,7 @@ add_library(detour_asm_engine STATIC
 )
 
 add_library(detour STATIC 
-            src/detours.cpp
+            src/detours_patch.cpp
             src/disasm.cpp
             src/helper.cpp
 )

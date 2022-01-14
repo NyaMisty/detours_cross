@@ -737,10 +737,22 @@ DETOUR_OFFLINE_LIBRARY(IA64)
 
 #undef DETOUR_OFFLINE_LIBRARY
 
+#ifdef __cplusplus
+}
+#endif // __cplusplus
+
+
+#endif // DETOURS_INTERNAL
+
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // Helpers for manipulating page protection.
 //
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
 _Success_(return != FALSE)
 BOOL WINAPI DetourVirtualProtectSameExecuteEx(_In_  HANDLE hProcess,
@@ -757,6 +769,7 @@ BOOL WINAPI DetourVirtualProtectSameExecute(_In_  PVOID pAddress,
 
 // Detours must depend only on kernel32.lib, so we cannot use IsEqualGUID
 BOOL WINAPI DetourAreSameGuid(_In_ REFGUID left, _In_ REFGUID right);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -767,7 +780,6 @@ BOOL WINAPI DetourAreSameGuid(_In_ REFGUID left, _In_ REFGUID right);
 
 //////////////////////////////////////////////////////////////////////////////
 
-#endif // DETOURS_INTERNAL
 #endif // __cplusplus
 
 #endif // _DETOURS_H_

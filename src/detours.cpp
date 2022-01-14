@@ -1238,7 +1238,7 @@ static PVOID detour_alloc_region_from_lo(PBYTE pbLo, PBYTE pbHi)
 
     DETOUR_TRACE((" Looking for free region in %p..%p from %p:\n", pbLo, pbHi, pbTry));
 
-    DETOUR_TRACE(("s_pSystemRegionLowerBound: %p, s_pSystemRegionUpperBound: %p\n"));
+    DETOUR_TRACE(("s_pSystemRegionLowerBound: %p, s_pSystemRegionUpperBound: %p\n", s_pSystemRegionLowerBound, s_pSystemRegionUpperBound));
 
     for (; pbTry < pbHi;) {
         MEMORY_BASIC_INFORMATION mbi;
@@ -1744,30 +1744,30 @@ LONG WINAPI DetourTransactionCommitEx(_Out_opt_ PVOID **pppFailedPointer)
 #endif // DETOURS_IA64
 
 #ifdef DETOURS_X64
-            detour_gen_jmp_indirect(o->pTrampoline->rbCodeIn, &o->pTrampoline->pbDetour);
-            PBYTE pbCode = detour_gen_jmp_immediate(o->pbTarget, o->pTrampoline->rbCodeIn);
-            pbCode = detour_gen_brk(pbCode, o->pTrampoline->pbRemain);
+            detour_gen_jmp_indirect_(o->pTrampoline->rbCodeIn, &o->pTrampoline->pbDetour);
+            PBYTE pbCode = detour_gen_jmp_immediate_(o->pbTarget, o->pTrampoline->rbCodeIn);
+            pbCode = detour_gen_brk_(pbCode, o->pTrampoline->pbRemain);
             *o->ppbPointer = o->pTrampoline->rbCode;
             UNREFERENCED_PARAMETER(pbCode);
 #endif // DETOURS_X64
 
 #ifdef DETOURS_X86
-            PBYTE pbCode = detour_gen_jmp_immediate(o->pbTarget, o->pTrampoline->pbDetour);
-            pbCode = detour_gen_brk(pbCode, o->pTrampoline->pbRemain);
+            PBYTE pbCode = detour_gen_jmp_immediate_(o->pbTarget, o->pTrampoline->pbDetour);
+            pbCode = detour_gen_brk_(pbCode, o->pTrampoline->pbRemain);
             *o->ppbPointer = o->pTrampoline->rbCode;
             UNREFERENCED_PARAMETER(pbCode);
 #endif // DETOURS_X86
 
 #ifdef DETOURS_ARM
-            PBYTE pbCode = detour_gen_jmp_immediate(o->pbTarget, NULL, o->pTrampoline->pbDetour);
-            pbCode = detour_gen_brk(pbCode, o->pTrampoline->pbRemain);
+            PBYTE pbCode = detour_gen_jmp_immediate_(o->pbTarget, NULL, o->pTrampoline->pbDetour);
+            pbCode = detour_gen_brk_(pbCode, o->pTrampoline->pbRemain);
             *o->ppbPointer = DETOURS_PBYTE_TO_PFUNC(o->pTrampoline->rbCode);
             UNREFERENCED_PARAMETER(pbCode);
 #endif // DETOURS_ARM
 
 #ifdef DETOURS_ARM64
-            PBYTE pbCode = detour_gen_jmp_indirect(o->pbTarget, (ULONG64*)&(o->pTrampoline->pbDetour));
-            pbCode = detour_gen_brk(pbCode, o->pTrampoline->pbRemain);
+            PBYTE pbCode = detour_gen_jmp_indirect_(o->pbTarget, (ULONG64*)&(o->pTrampoline->pbDetour));
+            pbCode = detour_gen_brk_(pbCode, o->pTrampoline->pbRemain);
             *o->ppbPointer = o->pTrampoline->rbCode;
             UNREFERENCED_PARAMETER(pbCode);
 #endif // DETOURS_ARM64
@@ -2298,23 +2298,23 @@ LONG WINAPI DetourAttachEx(_Inout_ PVOID *ppPointer,
 
     pbTrampoline = pTrampoline->rbCode + pTrampoline->cbCode;
 #ifdef DETOURS_X64
-    pbTrampoline = detour_gen_jmp_indirect(pbTrampoline, &pTrampoline->pbRemain);
-    pbTrampoline = detour_gen_brk(pbTrampoline, pbPool);
+    pbTrampoline = detour_gen_jmp_indirect_(pbTrampoline, &pTrampoline->pbRemain);
+    pbTrampoline = detour_gen_brk_(pbTrampoline, pbPool);
 #endif // DETOURS_X64
 
 #ifdef DETOURS_X86
-    pbTrampoline = detour_gen_jmp_immediate(pbTrampoline, pTrampoline->pbRemain);
-    pbTrampoline = detour_gen_brk(pbTrampoline, pbPool);
+    pbTrampoline = detour_gen_jmp_immediate_(pbTrampoline, pTrampoline->pbRemain);
+    pbTrampoline = detour_gen_brk_(pbTrampoline, pbPool);
 #endif // DETOURS_X86
 
 #ifdef DETOURS_ARM
-    pbTrampoline = detour_gen_jmp_immediate(pbTrampoline, &pbPool, pTrampoline->pbRemain);
-    pbTrampoline = detour_gen_brk(pbTrampoline, pbPool);
+    pbTrampoline = detour_gen_jmp_immediate_(pbTrampoline, &pbPool, pTrampoline->pbRemain);
+    pbTrampoline = detour_gen_brk_(pbTrampoline, pbPool);
 #endif // DETOURS_ARM
 
 #ifdef DETOURS_ARM64
-    pbTrampoline = detour_gen_jmp_immediate(pbTrampoline, &pbPool, pTrampoline->pbRemain);
-    pbTrampoline = detour_gen_brk(pbTrampoline, pbPool);
+    pbTrampoline = detour_gen_jmp_immediate_(pbTrampoline, &pbPool, pTrampoline->pbRemain);
+    pbTrampoline = detour_gen_brk_(pbTrampoline, pbPool);
 #endif // DETOURS_ARM64
 
     (void)pbTrampoline;
