@@ -8,7 +8,7 @@
 //
 
 
-//#define DETOUR_DEBUG 1
+// #define DETOUR_DEBUG 1
 #define DETOURS_INTERNAL
 #include "detours.h"
 
@@ -1099,7 +1099,7 @@ Rd is hardcoded as 0x10 above.
 Immediate is 21 signed bits split into 2 bits and 19 bits, and is scaled by 4K.
 */
                 UINT64 const pageLow2 = (Opcode >> 29) & 3;
-                UINT64 const pageHigh19 = (Opcode >> 5) & ~(~0ui64 << 19);
+                UINT64 const pageHigh19 = (Opcode >> 5) & ~(~0u << 19);
                 INT64 const page = detour_sign_extend((pageHigh19 << 2) | pageLow2, 21) << 12;
 
 /* https://static.docs.arm.com/ddi0487/bb/DDI0487B_b_armv8_arm.pdf
@@ -1116,7 +1116,7 @@ Unsigned offset
 That is, two low 5 bit fields are registers, hardcoded as 0x10 and 0x10 << 5 above,
 then unsigned size-unscaled (8) 12-bit offset, then opcode bits 0xF94.
 */
-                UINT64 const offset = ((Opcode2 >> 10) & ~(~0ui64 << 12)) << 3;
+                UINT64 const offset = ((Opcode2 >> 10) & ~(~0u << 12)) << 3;
 
                 PBYTE const pbTarget = (PBYTE)((ULONG64)pbCode & 0xfffffffffffff000ULL) + page + offset;
 
@@ -1238,6 +1238,8 @@ static PVOID detour_alloc_region_from_lo(PBYTE pbLo, PBYTE pbHi)
 
     DETOUR_TRACE((" Looking for free region in %p..%p from %p:\n", pbLo, pbHi, pbTry));
 
+    DETOUR_TRACE(("s_pSystemRegionLowerBound: %p, s_pSystemRegionUpperBound: %p\n"));
+
     for (; pbTry < pbHi;) {
         MEMORY_BASIC_INFORMATION mbi;
 
@@ -1283,6 +1285,7 @@ static PVOID detour_alloc_region_from_lo(PBYTE pbLo, PBYTE pbHi)
 
 static PVOID detour_alloc_region_from_hi(PBYTE pbLo, PBYTE pbHi)
 {
+    printf("alloc_from_hi; %p - %p\n", pbLo, pbHi);
     PBYTE pbTry = detour_alloc_round_down_to_region(pbHi - DETOUR_REGION_SIZE);
 
     DETOUR_TRACE((" Looking for free region in %p..%p from %p:\n", pbLo, pbHi, pbTry));
@@ -1334,6 +1337,7 @@ static PVOID detour_alloc_trampoline_allocate_new(PBYTE pbTarget,
                                                   PDETOUR_TRAMPOLINE pLo,
                                                   PDETOUR_TRAMPOLINE pHi)
 {
+    printf("detour_alloc_trampoline_allocate_new(%p)\n", pbTarget);
     PVOID pbTry = NULL;
 
     // NB: We must always also start the search at an offset from pbTarget
@@ -2106,6 +2110,7 @@ LONG WINAPI DetourAttachEx(_Inout_ PVOID *ppPointer,
         return error;
     }
 
+    printf("detours: alloc_trampoline\n");
     pTrampoline = detour_alloc_trampoline(pbTarget);
     if (pTrampoline == NULL) {
         error = ERROR_NOT_ENOUGH_MEMORY;

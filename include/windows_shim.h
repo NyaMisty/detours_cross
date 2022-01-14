@@ -1,3 +1,5 @@
+#define DETOUR_DEBUG 1
+
 #ifndef _WINDOWS
 
 #include <stdint.h>
@@ -19,7 +21,7 @@ typedef int32_t BOOL;
 typedef int32_t INT, INT32;
 typedef uint32_t UINT, UINT32;
 typedef int64_t INT64, LONG64;
-typedef uint64_t UINT64;
+typedef uint64_t UINT64, ULONG64;
 typedef long long LONGLONG;
 typedef void VOID, *HMODULE, *PVOID, *LPVOID;
 #define TRUE ((BOOL)1)
@@ -94,7 +96,9 @@ static unsigned long DetourGetModuleSize(void *) {
 
 #ifdef _DARWIN
 #include <unistd.h>
-#include <mach/mach.h> 
+#include <sys/mman.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
 #include <mach/vm_region.h>
 #include <mach/vm_map.h>
 #endif
@@ -124,13 +128,14 @@ static void CopyMemory(
     memcpy(Destination, Source, Length);
 }
 
-#define PAGE_READ 1
-#define PAGE_WRITE 2 
-#define PAGE_EXECUTE 4
-#define PAGE_READONLY (PAGE_READ)
-#define PAGE_READWRITE (PAGE_READ | PAGE_WRITE)
-#define PAGE_EXECUTE_READ (PAGE_READ | PAGE_EXECUTE)
-#define PAGE_EXECUTE_READWRITE (PAGE_READ | PAGE_WRITE | PAGE_EXECUTE)
+#define PAGE_NOACCESS 1
+#define PAGE_READONLY 2
+#define PAGE_READWRITE 4
+#define PAGE_EXECUTE 0x10
+#define PAGE_WRITECOPY 0x8
+#define PAGE_EXECUTE_READ (PAGE_READONLY * PAGE_EXECUTE)
+#define PAGE_EXECUTE_READWRITE (PAGE_READWRITE * PAGE_EXECUTE)
+#define PAGE_EXECUTE_WRITECOPY (PAGE_WRITECOPY * PAGE_EXECUTE)
 
 #define MEM_COMMIT 0x00001000
 #define MEM_FREE   0x00010000
@@ -148,6 +153,40 @@ typedef struct _MEMORY_BASIC_INFORMATION {
   DWORD  Protect;
   DWORD  Type;
 } MEMORY_BASIC_INFORMATION, *PMEMORY_BASIC_INFORMATION;
+
+static void WinProtToRWX(DWORD flProtect, int *r, int *w, int *x) {
+    if (flProtect && (flProtect & 0xF) == 0) {
+        *x = 1;
+        flProtect >>= 4;
+    }
+    switch (flProtect) {
+    case PAGE_READONLY:
+        *r = 1;
+        *w = 0;
+        break;
+    case PAGE_READWRITE:
+        *r = 1;
+        *w = 1;
+        break;
+    default:
+        *r = 1;
+        *w = 1;
+        break;
+    }
+}
+
+static DWORD RWXToWinProt(int r, int w, int x) {
+    DWORD ret = PAGE_NOACCESS;
+    if (r && w) {
+        ret = PAGE_READWRITE;
+    } else if (r) {
+        ret = PAGE_READONLY;
+    }
+    if (x) {
+        ret *= PAGE_EXECUTE;
+    }
+    return ret;
+}
 
 static SIZE_T VirtualQuery(
   LPCVOID                   lpAddress,
@@ -173,11 +212,10 @@ static SIZE_T VirtualQuery(
                 lpBuffer->BaseAddress = (PVOID)addr0;
                 lpBuffer->AllocationBase = (PVOID)addr0;
                 lpBuffer->RegionSize = addr1 - addr0;
-                prot |= (end1+1)[0] == 'r' ? PAGE_READ : 0;
-                prot |= (end1+1)[1] == 'w' ? PAGE_WRITE : 0;
-                prot |= (end1+1)[2] == 'x' ? PAGE_EXECUTE : 0;
-                prot |= (end1+1)[3] == 'p' ? 0
-                     : (end1+1)[3] == 's' ? 0 : 0;
+                int r = (end1+1)[0] == 'r';
+                int w = (end1+1)[1] == 'w';
+                int x = (end1+1)[2] == 'x';
+                int prot = RWXToWinProt(r,w,x);
                 lpBuffer->AllocationProtect = prot;
                 lpBuffer->PartitionId = 0;
                 lpBuffer->State = MEM_COMMIT;
@@ -204,31 +242,39 @@ static SIZE_T VirtualQuery(
     kern_return_t kr = KERN_SUCCESS;
     mach_port_t object_name;
     mach_vm_size_t size_info;
-    mach_vm_address_t address_info = address;
+    mach_vm_address_t address_info = (mach_vm_address_t)lpAddress;
     mach_msg_type_number_t info_cnt = sizeof (vm_region_basic_info_data_64_t);
     vm_region_basic_info_data_64_t info;
-    kr = mach_vm_region(mach_task_self(), &address_info, &size_info, VM_REGION_BASIC_INFO_64, (vm_region_info_t)info, &info_cnt, &object_name);
+    kr = mach_vm_region(mach_task_self(), &address_info, &size_info, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &info_cnt, &object_name);
     if (kr) {
-        SetLastError(kr + ERROR_TFP_FAIL_BASE);
+        SetLastError(kr + ERROR_MACH_FAIL_BASE);
     }
-    lpAddress->BaseAddress = (PVOID)address_info;
-    lpAddress->AllocationBase = (PVOID)address_info;
-    lpAddress->RegionSize = size_info;
-    prot |= info.protection & VM_PROT_READ ? PAGE_READ : 0;
-    prot |= info.protection & VM_PROT_WRITE ? PAGE_WRITE : 0;
-    prot |= info.protection & VM_PROT_EXECUTE ? PAGE_EXECUTE : 0;
-    lpAddress->AllocationProtect = prot;
-    lpAddress->PartitionId = 0;
-    lpAddress->State = MEM_COMMIT;
+    if ((ULONG_PTR)address_info <= (ULONG_PTR)lpAddress) {
+        lpBuffer->BaseAddress = (PVOID)address_info;
+        lpBuffer->AllocationBase = (PVOID)address_info;
+        lpBuffer->RegionSize = size_info;
+        lpBuffer->State = MEM_COMMIT;
+    } else {
+        lpBuffer->BaseAddress = (PVOID)lpAddress;
+        lpBuffer->AllocationBase = (PVOID)lpAddress;
+        lpBuffer->RegionSize = (ULONG_PTR)address_info - (ULONG_PTR)lpAddress;
+        lpBuffer->State = MEM_FREE;
+    }
+    int r = info.protection & VM_PROT_READ;
+    int w = info.protection & VM_PROT_WRITE;
+    int x = info.protection & VM_PROT_EXECUTE;
+    int prot = RWXToWinProt(r,w,x);
+    lpBuffer->AllocationProtect = prot;
+    lpBuffer->PartitionId = 0;
     return sizeof(MEMORY_BASIC_INFORMATION);
 #endif
     return 0;
 }
 
 static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD *flOld) {
-    int newR = flNewProtect & PAGE_READ;
-    int newW = flNewProtect & PAGE_WRITE;
-    int newX = flNewProtect & PAGE_EXECUTE;
+    printf("VirtualProtect(%p, %lx, %d)\n", addr, dwSize, flNewProtect);
+    int newR = 0, newW = 0, newX = 0;
+    WinProtToRWX(flNewProtect, &newR, &newW, &newX);
 #if defined(_LINUX) || defined(_DARWIN)
     LONG aligned_addr = (LONG)addr & ~(getpagesize() - 1);
     SIZE_T aligned_size = (LONG)addr - aligned_addr + dwSize;
@@ -263,7 +309,7 @@ static SIZE_T VirtualQueryEx(
     if (hProcess != GetCurrentProcess()) {
         return 0;
     }
-    return VirtualQueryEx(lpAddress, lpBuffer, dwLength);
+    return VirtualQuery(lpAddress, lpBuffer, dwLength);
 }
 
 static BOOL VirtualProtectEx(HANDLE hProcess, PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD *flOld) {
@@ -279,16 +325,19 @@ static LPVOID VirtualAlloc(
   DWORD  flAllocationType,
   DWORD  flProtect
 ) {
-    int newR = flProtect & PAGE_READ;
-    int newW = flProtect & PAGE_WRITE;
-    int newX = flProtect & PAGE_EXECUTE;
+    printf("VirtualAlloc(%p, 0x%lx, %d, %d)\n", lpAddress, dwSize, flAllocationType, flProtect);
+    int newR = 0, newW = 0, newX = 0;
+    WinProtToRWX(flProtect, &newR, &newW, &newX);
+    printf("RWX parsed: %d %d %d\n", newR, newW, newX);
     int newProt = 0;
     newProt |= newR ? PROT_READ : 0;
     newProt |= newW ? PROT_WRITE : 0;
     newProt |= newX ? PROT_EXEC : 0;
 
     LPVOID retAddr = mmap(lpAddress, dwSize, newProt, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
-    if (!retAddr) {
+    printf("mmap(%p, 0x%lx, %d) = %p, errno = %d\n", lpAddress, dwSize, newProt, retAddr, errno);
+    
+    if (retAddr == (LPVOID)-1) {
         SetLastError(ERROR_ERRNO_FAIL_BASE + errno);
         return NULL;
     }
