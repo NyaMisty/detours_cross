@@ -958,6 +958,7 @@ struct ARM64_INDIRECT_JMP {
 
     ULONG br;
 };
+C_ASSERT(sizeof(ARM64_INDIRECT_JMP) == 12);
 
 #pragma warning(push)
 #pragma warning(disable:4201)
@@ -1258,7 +1259,7 @@ static PVOID detour_alloc_region_from_lo(PBYTE pbLo, PBYTE pbHi)
                       pbTry,
                       mbi.BaseAddress,
                       (PBYTE)mbi.BaseAddress + mbi.RegionSize - 1,
-                      mbi.State));
+                      (unsigned long)mbi.State));
 
         if (mbi.State == MEM_FREE && mbi.RegionSize >= DETOUR_REGION_SIZE) {
 
@@ -1309,7 +1310,7 @@ static PVOID detour_alloc_region_from_hi(PBYTE pbLo, PBYTE pbHi)
                       pbTry,
                       mbi.BaseAddress,
                       (PBYTE)mbi.BaseAddress + mbi.RegionSize - 1,
-                      mbi.State));
+                      (unsigned long)mbi.State));
 
         if (mbi.State == MEM_FREE && mbi.RegionSize >= DETOUR_REGION_SIZE) {
 

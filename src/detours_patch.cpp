@@ -1,6 +1,19 @@
+#define DETOURS_INTERNAL
+#include <detours.h>
+#undef DETOURS_INTERNAL
+
+#include <stdlib.h>
 #include <stdint.h>
+#include <memory.h>
 typedef uintptr_t ULONG_PTR_;
-typedef unsigned char *PBYTE_;
+typedef unsigned char BYTE_,*PBYTE_;
+typedef uint64_t ULONG64_;
+PBYTE_ detour_gen_jmp_immediate(PBYTE_ pbCode, PBYTE_ pbJmpVal);
+PBYTE_ detour_gen_jmp_indirect(PBYTE_ pbCode, PBYTE_ *ppbJmpVal);
+PBYTE_ detour_gen_brk(PBYTE_ pbCode, PBYTE_ pbLimit);
+PBYTE_ detour_gen_jmp_immediate(PBYTE_ pbCode, PBYTE_ *ppPool, PBYTE_ pbJmpVal);
+PBYTE_ detour_gen_jmp_indirect(BYTE_ *pbCode, ULONG64_ *pbJmpVal);
+
 struct DetourMemoryOpWrapper {
     DetourMemoryOpWrapper *pNext;
     DetourMemoryOpWrapper *pPrev;
@@ -8,24 +21,34 @@ struct DetourMemoryOpWrapper {
     char rbCode[0x100];
 };
 
-static DetourMemoryOpWrapper *s_detoursMemoryOp = NULL;
+static DetourMemoryOpWrapper *s_detoursMemoryOp = nullptr;
+
+
+static BOOL is_trampoline(ULONG_PTR_ addr);
 
 inline static void push_op(DetourMemoryOpWrapper *o) {
     o->pPrev = s_detoursMemoryOp;
     if (s_detoursMemoryOp) {
         s_detoursMemoryOp->pNext = o;
     }
-    o->pNext = NULL;
+    o->pNext = nullptr;
     s_detoursMemoryOp = o;
 }
+
+#define MAX_PAGE_SIZE 0x1000
+#define MAX_PATCH_SIZE 0x100
 
 // do 's|detour_gen_(.*?)\((.*?)\);|detour_gen_$1_($2);|' on detours.cpp
 template<typename T1, typename T2>
 PBYTE_ detour_gen_jmp_indirect_(T1 pbCode, T2 value) {
-    char pbCodeBuf[0x100] = { 0 };
-    memcpy(pbCodeBuf, pbCode, sizeof(pbCodeBuf));
-    ULONG_PTR_ newvalue = NULL;
-    if (value != NULL) {
+    DETOUR_TRACE(("detour_gen_jmp_indirect_(%p, %p)\n", pbCode, value));
+    if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_jmp_indirect((T1)pbCode, (T2)value);
+
+    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
+    memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
+    ULONG_PTR_ newvalue = 0;
+    if (value != nullptr) {
         newvalue = (ULONG_PTR_)value - (ULONG_PTR_)pbCode + (ULONG_PTR_)pbCodeBuf;
     }
     PBYTE_ ret = detour_gen_jmp_indirect((T1)pbCodeBuf, (T2)newvalue);
@@ -41,10 +64,14 @@ PBYTE_ detour_gen_jmp_indirect_(T1 pbCode, T2 value) {
 
 template<typename T1, typename T2>
 PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 value) {
-    char pbCodeBuf[0x100] = { 0 };
-    memcpy(pbCodeBuf, pbCode, sizeof(pbCodeBuf));
-    ULONG_PTR_ newvalue = NULL;
-    if (value != NULL) {
+    DETOUR_TRACE(("detour_gen_jmp_immediate_(%p, %p)\n", pbCode, value));
+    if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_jmp_immediate((T1)pbCode, (T2)value);
+    
+    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
+    memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
+    ULONG_PTR_ newvalue = 0;
+    if (value != nullptr) {
         newvalue = (ULONG_PTR_)value - (ULONG_PTR_)pbCode + (ULONG_PTR_)pbCodeBuf;
     }
     PBYTE_ ret = detour_gen_jmp_immediate((T1)pbCodeBuf, (T2)(ULONG_PTR_)newvalue);
@@ -60,17 +87,22 @@ PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 value) {
 
 template<typename T1, typename T2, typename T3>
 PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 ppPool, T3 pbJmpVal) {
+    DETOUR_TRACE(("detour_gen_jmp_immediate_(%p, %p, %p)\n", pbCode, ppPool, pbJmpVal));
+    if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_jmp_immediate((T1)pbCode, (T2)ppPool, (T3)pbJmpVal);
+    
     if (ppPool) {
+        DETOUR_TRACE(("detour_gen_jmp_immediate_: Warning, cannot handle ppPool cases!\n"));
         return detour_gen_jmp_immediate(pbCode, ppPool, pbJmpVal);
     }
 
-    char pbCodeBuf[0x100] = { 0 };
-    memcpy(pbCodeBuf, pbCode, sizeof(pbCodeBuf));
-    ULONG_PTR_ newvalue = NULL;
-    if (value != NULL) {
+    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
+    memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
+    ULONG_PTR_ newvalue = 0;
+    if (pbJmpVal != nullptr) {
         newvalue = (ULONG_PTR_)pbJmpVal - (ULONG_PTR_)pbCode + (ULONG_PTR_)pbCodeBuf;
     }
-    PBYTE_ ret = detour_gen_jmp_immediate((T1)pbCodeBuf, NULL, (T3)newvalue);
+    PBYTE_ ret = detour_gen_jmp_immediate((T1)pbCodeBuf, nullptr, (T3)newvalue);
     
     DetourMemoryOpWrapper *o = new DetourMemoryOpWrapper;
     o->pbCode = pbCode;
@@ -83,10 +115,14 @@ PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 ppPool, T3 pbJmpVal) {
 
 template<typename T1, typename T2>
 PBYTE_ detour_gen_brk_(T1 pbCode, T2 value) {
-    char pbCodeBuf[0x100] = { 0 };
-    memcpy(pbCodeBuf, pbCode, sizeof(pbCodeBuf));
-    ULONG_PTR_ newvalue = NULL;
-    if (value != NULL) {
+    DETOUR_TRACE(("detour_gen_brk_(%p, %p)\n", pbCode, value));
+    if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_brk((T1)pbCode, (T2)value);
+
+    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
+    memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
+    ULONG_PTR_ newvalue = 0;
+    if (value != nullptr) {
         newvalue = (ULONG_PTR_)value - (ULONG_PTR_)pbCode + (ULONG_PTR_)pbCodeBuf;
     }
     PBYTE_ ret = detour_gen_brk((T1)pbCodeBuf, (T2)newvalue);
@@ -104,34 +140,18 @@ PBYTE_ detour_gen_brk_(T1 pbCode, T2 value) {
 #include "detours.cpp"
 #undef DetourTransactionCommit
 
+static BOOL is_trampoline(ULONG_PTR_ addr) {
+    for (PDETOUR_REGION pRegion = s_pRegions; pRegion != NULL; pRegion = pRegion->pNext) {
+        ULONG_PTR_ addrRegion = (ULONG_PTR_)pRegion;
+        if ( addrRegion <= addr  && addr < addrRegion + DETOUR_REGION_SIZE ) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+
 #include <vector>
-
-#if defined(_DARWIN) || defined(_LINUX)
-static BOOL CodePatch(void *target, void *buffer, size_t count) {
-    DWORD flOld = 0;
-    if (!VirtualProtect(target, count, PAGE_READWRITE, &flOld)) {
-        return FALSE;
-    }
-    memcpy(target, buffer, count);
-    if (!VirtualProtect(target, count, flOld, &flOld)) {
-        return FALSE;
-    }
-    return TRUE;
-}
-#elif defined(_WINDOWS)
-static BOOL CodePatch(void *target, void *buffer, size_t count) {
-    DWORD flOld = 0;
-    if (!VirtualProtect(target, count, PAGE_READWRITE, &flOld)) {
-        return FALSE;
-    }
-    memcpy(target, buffer, count);
-    if (!VirtualProtect(target, count, flOld, &flOld)) {
-        return FALSE;
-    }
-    return TRUE;
-}
-#endif
-
 
 extern "C" {
 
@@ -143,9 +163,9 @@ extern "C" {
 //     DWORD flOld;
 // };
 LONG WINAPI DetourTransactionCommit() {
-//     DetourOperationWrapper *ori_s_pPendingOperations = NULL;
+//     DetourOperationWrapper *ori_s_pPendingOperations = nullptr;
 //     LONG ret = 0;
-//     for (DetourOperation *o = s_pPendingOperations; o != NULL;) {
+//     for (DetourOperation *o = s_pPendingOperations; o != nullptr;) {
 //         DetourOperationWrapper *o_ = new DetourOperationWrapper;
 //         o_->oldPbTarget = o->pbTarget;
 //         o_->cbTarget = o->pTrampoline->pbRemain - o->pbTarget;
@@ -174,7 +194,7 @@ LONG WINAPI DetourTransactionCommit() {
 //         DETOUR_TRACE(("Error During VirtualProtect prepare: %d\n", ret));
 //     }
     
-//     for (DetourOperationWrapper *o_ = ori_s_pPendingOperations; o_ != NULL;) {
+//     for (DetourOperationWrapper *o_ = ori_s_pPendingOperations; o_ != nullptr;) {
 //         //if (!!memcmp(o_->oldPbTarget, o_->newPbTarget, o_->cbTarget)) {
 //         //    DETOUR_TRACE(("Applying After transaction commit: %p (%x) <- %p\n", o_->oldPbTarget, o_->cbTarget, o_->newPbTarget));
 //         //    CodePatch(o_->oldPbTarget, o_->newPbTarget, o_->cbTarget);
@@ -193,18 +213,32 @@ LONG WINAPI DetourTransactionCommit() {
 //     }
 //     return ret;
     LONG ret = _DetourTransactionCommit();
-    DetourMemoryOpWrapper *begin = NULL;
-    for (DetourMemoryOpWrapper *o = s_detoursMemoryOp; o != NULL; ) {
+    DetourMemoryOpWrapper *begin = nullptr;
+    for (DetourMemoryOpWrapper *o = s_detoursMemoryOp; o != nullptr; ) {
         begin = o;
         o = o->pPrev;
     }
-    for (DetourMemoryOpWrapper *o = begin; o != NULL; ) {
+    for (DetourMemoryOpWrapper *o = begin; o != nullptr; ) {
+        BYTE *rbCode = (BYTE *)o->rbCode;
         DETOUR_TRACE(("Applying Code Changes: %p\n", o->pbCode));
+        DETOUR_TRACE(("detours: pbCode=%p: "
+                          "%02x %02x %02x %02x "
+                          "%02x %02x %02x %02x "
+                          "%02x %02x %02x %02x [after]\n",
+                          o->pbCode,
+                          rbCode[0], rbCode[1], rbCode[2], rbCode[3],
+                          rbCode[4], rbCode[5], rbCode[6], rbCode[7],
+                          rbCode[8], rbCode[9], rbCode[10], rbCode[11]));
         if (!CodePatch(o->pbCode, o->rbCode, sizeof(o->rbCode)))
             ret = GetLastError();
         DetourMemoryOpWrapper *n = o->pNext;
         delete o;
         o = n;
+    }
+    // Mark all of the regions as executable.
+    for (PDETOUR_REGION pRegion = s_pRegions; pRegion != NULL; pRegion = pRegion->pNext) {
+        DETOUR_TRACE(("Marking Trampolines as RX: %p\n", pRegion));
+        CodePatch(pRegion, NULL, DETOUR_REGION_SIZE);
     }
     return ret;
 }

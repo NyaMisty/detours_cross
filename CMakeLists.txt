@@ -15,7 +15,11 @@ add_library(detour STATIC
             src/detours_patch.cpp
             src/disasm.cpp
             src/helper.cpp
+            src/code_patch.cpp
 )
+
+set_property(TARGET detour_asm_engine PROPERTY CXX_STANDARD 11)
+set_property(TARGET detour PROPERTY CXX_STANDARD 11)
 
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "MSYS")

@@ -1,0 +1,5 @@
+/Users/misty/m1-test/ida-patch-misty/detours_cross/build/CMakeFiles/rebuild_cache.dir
+/Users/misty/m1-test/ida-patch-misty/detours_cross/build/CMakeFiles/edit_cache.dir
+/Users/misty/m1-test/ida-patch-misty/detours_cross/build/CMakeFiles/sample_simple.dir
+/Users/misty/m1-test/ida-patch-misty/detours_cross/build/CMakeFiles/detour.dir
+/Users/misty/m1-test/ida-patch-misty/detours_cross/build/CMakeFiles/detour_asm_engine.dir

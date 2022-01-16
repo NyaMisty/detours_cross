@@ -20,6 +20,9 @@ static int user_input = 0;
 
 int to_be_hook(int arg)
 {
+    for (int i = 0; i < 100; i++) {
+        if(i % 2) arg++; else arg--;
+    }
     printf("simple: to_be_hook got arg: %d.\n", arg);
     return arg;
 }

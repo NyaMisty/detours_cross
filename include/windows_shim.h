@@ -1,3 +1,4 @@
+// Define DETOUR_TRACE macro
 #define DETOUR_DEBUG 1
 #ifndef DETOUR_TRACE
 #if DETOUR_DEBUG
@@ -8,6 +9,7 @@
 #endif
 #endif
 
+// Definition for Windows related things
 #ifndef _WINDOWS
 
 #include <stdint.h>
@@ -34,8 +36,9 @@ typedef long long LONGLONG;
 typedef void VOID, *HMODULE, *PVOID, *LPVOID;
 #define TRUE ((BOOL)1)
 #define FALSE ((BOOL)0)
-typedef long LONG;
-typedef unsigned long ULONG, *PULONG;
+// long is 8bytes in Clang/GCC, but 4bytes on Windows
+typedef int LONG;
+typedef unsigned int ULONG, *PULONG;
 typedef uintptr_t ULONG_PTR;
 typedef intptr_t LONG_PTR;
 typedef size_t SIZE_T;
@@ -83,12 +86,27 @@ static HANDLE GetCurrentProcess() {
 
 
 #ifdef DETOURS_INTERNAL
+
 extern "C" {
 static unsigned long DetourGetModuleSize(void *) {
     return 0x1337;
 }
 }
-#ifndef _WINDOWS
+
+#include <limits.h>
+#undef LONG_MAX
+#undef LONG_MIN
+#define LONG_MAX INT_MAX
+#define LONG_MIN INT_MIN
+
+// Definition for windows shim functions
+#ifdef _WINDOWS
+
+static int getpagesize() {
+    return 0x1000;
+}
+
+#else
 
 #include <stdio.h>
 #include <stddef.h>
@@ -125,7 +143,7 @@ LONG InterlockedCompareExchange(LONG *ptr, LONG nval, LONG oval)
 }
 
 static inline ULONG PtrToUlong(PVOID ptr) {
-    return (ULONG)(ptr);
+    return (ULONG)(ULONG_PTR)(ptr);
 }
 
 static void CopyMemory(
@@ -280,34 +298,37 @@ static SIZE_T VirtualQuery(
 }
 
 static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD *flOld) {
-    DETOUR_TRACE(("VirtualProtect(%p, %lx, %d)\n", addr, dwSize, flNewProtect));
+    DETOUR_TRACE(("VirtualProtect(%p, %lx, 0x%x)\n", addr, dwSize, flNewProtect));
     int newR = 0, newW = 0, newX = 0;
     WinProtToRWX(flNewProtect, &newR, &newW, &newX);
-#ifdef _DARWIN
-    if (newW && newX) {
-        DETOUR_TRACE(("W^X detected, removing executing bit!"));
-        newX = 0;
-    }
-#endif
 
 #if defined(_LINUX) || defined(_DARWIN)
-    LONG aligned_addr = (LONG)addr & ~(getpagesize() - 1);
-    SIZE_T aligned_size = (LONG)addr - aligned_addr + dwSize;
+    ULONG_PTR aligned_addr = (ULONG_PTR)addr & ~(getpagesize() - 1);
+    SIZE_T aligned_size = (ULONG_PTR)addr - aligned_addr + dwSize;
     MEMORY_BASIC_INFORMATION mbi;
     if (!VirtualQuery((void *)aligned_addr, &mbi, sizeof(mbi))) {
         return FALSE;
     }
     int oldProt = mbi.AllocationProtect;
+    *flOld = oldProt;
+#ifdef _DARWIN
+    if (newW && newX) {
+        //DETOUR_TRACE(("W^X detected, removing executing bit!"));
+        //newX = 0;
+        DETOUR_TRACE(("VirtualProtect: W^X detected, ignoring and directly return!\n"));
+        return TRUE;
+    }
+#endif
     int newProt = 0;
     newProt |= newR ? PROT_READ : 0;
     newProt |= newW ? PROT_WRITE : 0;
     newProt |= newX ? PROT_EXEC : 0;
     int ret = mprotect((void *)aligned_addr, aligned_size, newProt);
     if (ret == -1){
+        DETOUR_TRACE(("VirtualProtect mprotect fail... errno=%d\n", errno));
         SetLastError(ERROR_ERRNO_FAIL_BASE + errno);
         return FALSE;
     }
-    *flOld = oldProt;
     return TRUE;
 #else
 #error Unknown OS (Please define _LINUX or _DARWIN)
@@ -340,13 +361,13 @@ static LPVOID VirtualAlloc(
   DWORD  flAllocationType,
   DWORD  flProtect
 ) {
-    DETOUR_TRACE(("VirtualAlloc(%p, 0x%lx, %d, %d)\n", lpAddress, dwSize, flAllocationType, flProtect));
+    DETOUR_TRACE(("VirtualAlloc(%p, 0x%lx, %d, 0x%x)\n", lpAddress, dwSize, flAllocationType, flProtect));
     int newR = 0, newW = 0, newX = 0;
     WinProtToRWX(flProtect, &newR, &newW, &newX);
     DETOUR_TRACE(("RWX parsed: %d %d %d\n", newR, newW, newX));
 #ifdef _DARWIN
     if (newW && newX) {
-        DETOUR_TRACE(("W^X detected, removing executing bit!"));
+        DETOUR_TRACE(("W^X detected, removing executing bit!\n"));
         newX = 0;
     }
 #endif
@@ -354,7 +375,6 @@ static LPVOID VirtualAlloc(
     newProt |= newR ? PROT_READ : 0;
     newProt |= newW ? PROT_WRITE : 0;
     newProt |= newX ? PROT_EXEC : 0;
-    if ()
 
     LPVOID retAddr = mmap(lpAddress, dwSize, newProt, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
     DETOUR_TRACE(("mmap(%p, 0x%lx, %d) = %p, errno = %d\n", lpAddress, dwSize, newProt, retAddr, errno));

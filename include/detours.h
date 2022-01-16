@@ -17,6 +17,7 @@
 //
 
 #include "windows_shim.h"
+#include "code_patch.h"
 
 #ifdef DETOURS_INTERNAL
 
