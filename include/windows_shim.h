@@ -1,5 +1,5 @@
 // Define DETOUR_TRACE macro
-#define DETOUR_DEBUG 1
+// #define DETOUR_DEBUG 1
 #ifndef DETOUR_TRACE
 #if DETOUR_DEBUG
 #define DETOUR_TRACE(x) printf x
@@ -311,12 +311,14 @@ static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD 
     }
     int oldProt = mbi.AllocationProtect;
     *flOld = oldProt;
+    BOOL ignoreRet = FALSE;
 #ifdef _DARWIN
     if (newW && newX) {
-        //DETOUR_TRACE(("W^X detected, removing executing bit!"));
-        //newX = 0;
-        DETOUR_TRACE(("VirtualProtect: W^X detected, ignoring and directly return!\n"));
-        return TRUE;
+        DETOUR_TRACE(("W^X detected, removing executing bit & ignoring error!\n"));
+        newX = 0;
+        ignoreRet = TRUE;
+        // DETOUR_TRACE(("VirtualProtect: W^X detected, ignoring and directly return!\n"));
+        // return TRUE;
     }
 #endif
     int newProt = 0;
@@ -324,7 +326,7 @@ static BOOL VirtualProtect(PVOID addr, SIZE_T dwSize, DWORD flNewProtect, DWORD 
     newProt |= newW ? PROT_WRITE : 0;
     newProt |= newX ? PROT_EXEC : 0;
     int ret = mprotect((void *)aligned_addr, aligned_size, newProt);
-    if (ret == -1){
+    if (!ignoreRet && ret == -1){
         DETOUR_TRACE(("VirtualProtect mprotect fail... errno=%d\n", errno));
         SetLastError(ERROR_ERRNO_FAIL_BASE + errno);
         return FALSE;

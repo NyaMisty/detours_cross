@@ -44,7 +44,7 @@ PBYTE_ detour_gen_jmp_indirect_(T1 pbCode, T2 value) {
     DETOUR_TRACE(("detour_gen_jmp_indirect_(%p, %p)\n", pbCode, value));
     if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_jmp_indirect((T1)pbCode, (T2)value);
 
-    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char _pbCodeBuf[2 * MAX_PAGE_SIZE + 0x100] = { 0 };
     char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
     memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
     ULONG_PTR_ newvalue = 0;
@@ -67,7 +67,7 @@ PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 value) {
     DETOUR_TRACE(("detour_gen_jmp_immediate_(%p, %p)\n", pbCode, value));
     if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_jmp_immediate((T1)pbCode, (T2)value);
     
-    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char _pbCodeBuf[2 * MAX_PAGE_SIZE + 0x100] = { 0 };
     char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
     memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
     ULONG_PTR_ newvalue = 0;
@@ -95,7 +95,7 @@ PBYTE_ detour_gen_jmp_immediate_(T1 pbCode, T2 ppPool, T3 pbJmpVal) {
         return detour_gen_jmp_immediate(pbCode, ppPool, pbJmpVal);
     }
 
-    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char _pbCodeBuf[2 * MAX_PAGE_SIZE + 0x100] = { 0 };
     char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
     memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
     ULONG_PTR_ newvalue = 0;
@@ -118,7 +118,7 @@ PBYTE_ detour_gen_brk_(T1 pbCode, T2 value) {
     DETOUR_TRACE(("detour_gen_brk_(%p, %p)\n", pbCode, value));
     if (is_trampoline((ULONG_PTR_)(pbCode))) return detour_gen_brk((T1)pbCode, (T2)value);
 
-    char _pbCodeBuf[MAX_PAGE_SIZE + 0x100] = { 0 };
+    char _pbCodeBuf[2 * MAX_PAGE_SIZE + 0x100] = { 0 };
     char *pbCodeBuf = _pbCodeBuf + MAX_PAGE_SIZE - ((ULONG_PTR_)_pbCodeBuf & 0xfff) + ((ULONG_PTR_)pbCode & 0xfff);
     memcpy(pbCodeBuf, pbCode, MAX_PATCH_SIZE);
     ULONG_PTR_ newvalue = 0;
@@ -235,11 +235,12 @@ LONG WINAPI DetourTransactionCommit() {
         delete o;
         o = n;
     }
+    s_detoursMemoryOp = NULL;
     // Mark all of the regions as executable.
-    for (PDETOUR_REGION pRegion = s_pRegions; pRegion != NULL; pRegion = pRegion->pNext) {
-        DETOUR_TRACE(("Marking Trampolines as RX: %p\n", pRegion));
-        CodePatch(pRegion, NULL, DETOUR_REGION_SIZE);
-    }
+    // for (PDETOUR_REGION pRegion = s_pRegions; pRegion != NULL; pRegion = pRegion->pNext) {
+    //     DETOUR_TRACE(("Marking Trampolines as RX: %p\n", pRegion));
+    //     CodePatch(pRegion, NULL, DETOUR_REGION_SIZE);
+    // }
     return ret;
 }
 

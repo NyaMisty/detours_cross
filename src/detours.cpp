@@ -1286,7 +1286,7 @@ static PVOID detour_alloc_region_from_lo(PBYTE pbLo, PBYTE pbHi)
 
 static PVOID detour_alloc_region_from_hi(PBYTE pbLo, PBYTE pbHi)
 {
-    printf("alloc_from_hi; %p - %p\n", pbLo, pbHi);
+    DETOUR_TRACE(("alloc_from_hi; %p - %p\n", pbLo, pbHi));
     PBYTE pbTry = detour_alloc_round_down_to_region(pbHi - DETOUR_REGION_SIZE);
 
     DETOUR_TRACE((" Looking for free region in %p..%p from %p:\n", pbLo, pbHi, pbTry));
@@ -1338,7 +1338,7 @@ static PVOID detour_alloc_trampoline_allocate_new(PBYTE pbTarget,
                                                   PDETOUR_TRAMPOLINE pLo,
                                                   PDETOUR_TRAMPOLINE pHi)
 {
-    printf("detour_alloc_trampoline_allocate_new(%p)\n", pbTarget);
+    DETOUR_TRACE(("detour_alloc_trampoline_allocate_new(%p)\n", pbTarget));
     PVOID pbTry = NULL;
 
     // NB: We must always also start the search at an offset from pbTarget
@@ -2111,7 +2111,7 @@ LONG WINAPI DetourAttachEx(_Inout_ PVOID *ppPointer,
         return error;
     }
 
-    printf("detours: alloc_trampoline\n");
+    DETOUR_TRACE(("detours: alloc_trampoline\n"));
     pTrampoline = detour_alloc_trampoline(pbTarget);
     if (pTrampoline == NULL) {
         error = ERROR_NOT_ENOUGH_MEMORY;
