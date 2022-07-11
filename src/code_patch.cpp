@@ -75,7 +75,7 @@ BOOL _CodePatchPage(void *address, void *buffer, uint32_t buffer_size) {
 
 BOOL _CodePatchPage(void *target, void *buffer, size_t count) {
     DWORD flOld = 0;
-    if (!VirtualProtect(target, count, PAGE_READWRITE_EXECUTE, &flOld)) {
+    if (!VirtualProtect(target, count, PAGE_EXECUTE_READWRITE, &flOld)) {
         return FALSE;
     }
     memcpy(target, buffer, count);
@@ -87,9 +87,11 @@ BOOL _CodePatchPage(void *target, void *buffer, size_t count) {
 
 #elif defined(_WINDOWS)
 
+#include <windows.h>
+
 BOOL _CodePatchPage(void *target, void *buffer, size_t count) {
     DWORD flOld = 0;
-    if (!VirtualProtect(target, count, PAGE_READWRITE_EXECUTE, &flOld)) {
+    if (!VirtualProtect(target, count, PAGE_EXECUTE_READWRITE, &flOld)) {
         return FALSE;
     }
     memcpy(target, buffer, count);  
