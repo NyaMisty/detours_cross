@@ -1,2 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libdetour_asm_engine.a CMakeFiles/detour_asm_engine.dir/src/disolarm.cpp.o CMakeFiles/detour_asm_engine.dir/src/disolarm64.cpp.o CMakeFiles/detour_asm_engine.dir/src/disolia64.cpp.o CMakeFiles/detour_asm_engine.dir/src/disolx86.cpp.o CMakeFiles/detour_asm_engine.dir/src/disolx64.cpp.o CMakeFiles/detour_asm_engine.dir/src/helper.cpp.o
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libdetour_asm_engine.a
