@@ -3,7 +3,7 @@
 #define DETOURS_INTERNAL
 #include "detours.h"
 
-#define min(a,b) ((a) < (b) ? (a) : (b))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 #if defined(_DARWIN)
 #include <sys/mman.h>
@@ -117,12 +117,12 @@ BOOL CodePatch(void *address, void *buffer, size_t buffer_size) {
     char * start_addr = (char *)address;
     char * startPage = (char *)((uintptr_t)(start_addr + getpagesize()) & ~(getpagesize() - 1));
     BOOL ret = TRUE;
-    if (!(ret = _CodePatchPage(start_addr, buffer, min(startPage - start_addr, buffer_size)))) {
+    if (!(ret = _CodePatchPage(start_addr, buffer, MIN(startPage - start_addr, buffer_size)))) {
         return ret;
     }
-    uint32_t bufloc = min(startPage - start_addr, buffer_size);
+    uint32_t bufloc = MIN(startPage - start_addr, buffer_size);
     while (bufloc < buffer_size) {
-        uint32_t nextbufloc = min(bufloc + 0x1000, buffer_size);
+        uint32_t nextbufloc = MIN(bufloc + 0x1000, buffer_size);
         if (!(ret = _CodePatchPage(start_addr + bufloc, (char *)buffer + bufloc, nextbufloc - bufloc))) {
             return ret;
         }
